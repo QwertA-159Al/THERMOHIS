@@ -121,8 +121,8 @@
     <main>
         <section class="summary" aria-label="Özet">
             <div class="summary-item"><span class="summary-label">Makine</span><span class="summary-value" id="machine-total">-</span></div>
-            <div class="summary-item"><span class="summary-label">Toplam 10 dk üretim</span><span class="summary-value" id="production-total">-</span></div>
-            <div class="row-selector"><label for="selected-day">Gün</label><input id="selected-day" type="date"><label for="shift">Vardiya</label><select id="shift"><option value="first">1. Vardiya (08:00-18:00)</option><option value="second">2. Vardiya (18:00-08:00)</option><option value="custom">Özel zaman</option></select><label for="start-time">Başlangıç</label><input id="start-time" type="datetime-local" step="600"><label for="end-time">Bitiş</label><input id="end-time" type="datetime-local" step="600"><button type="button" id="apply-time-range">Uygula</button></div>
+            <div class="summary-item"><span class="summary-label">Son 10 dk üretim</span><span class="summary-value" id="production-total">-</span></div>
+            <div class="row-selector"><label for="selected-day">Gün</label><input id="selected-day" type="date"><label for="shift">Vardiya</label><select id="shift"><option value="first">1. Vardiya (08:00-18:00)</option><option value="second">2. Vardiya (18:00-08:00)</option><option value="custom">Özel zaman</option></select><span class="custom-time-field" id="start-time-field"><label for="start-time">Başlangıç</label><input id="start-time" type="datetime-local" step="600"></span><span class="custom-time-field" id="end-time-field"><label for="end-time">Bitiş</label><input id="end-time" type="datetime-local" step="600"></span><button type="button" id="apply-time-range">Uygula</button></div>
         </section>
         <section class="trend-grid" id="trends" aria-live="polite"></section>
     </main>
@@ -213,7 +213,7 @@
                 return `<article class="trend-card"><h2>${escapeHtml(machine.name)}</h2><div class="trend-total">Toplam: ${total.toLocaleString('tr-TR')} adet | Geçen süre: ${formatElapsedTime(machine.values.length)} | Son 10 dk: ${lastValue.toLocaleString('tr-TR')} adet</div>${chart}</article>`;
             }).join('');
             document.getElementById('machine-total').textContent = series.length;
-            document.getElementById('production-total').textContent = series.reduce((sum, machine) => sum + machine.values.reduce((total, value) => total + value, 0), 0).toLocaleString('tr-TR');
+            document.getElementById('production-total').textContent = series.reduce((sum, machine) => sum + (machine.values[machine.values.length - 1] || 0), 0).toLocaleString('tr-TR');
             document.getElementById('updated').textContent = 'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
         }
 
@@ -323,9 +323,15 @@
             return formatDateTimeInput(date);
         }
 
+        function updateCustomTimeVisibility() {
+            const showCustomTimes = document.getElementById('shift').value === 'custom';
+            document.querySelectorAll('.custom-time-field').forEach(field => { field.hidden = !showCustomTimes; });
+        }
+
         function applyShiftTimes() {
             const dayInput = document.getElementById('selected-day');
             const shift = document.getElementById('shift').value;
+            updateCustomTimeVisibility();
             if (!dayInput.value || shift === 'custom') return;
             document.getElementById('start-time').value = shift === 'first'
                 ? setDateTime(dayInput, 8, 0)
@@ -362,6 +368,7 @@
         }
 
         setDefaultTimeRange();
+        updateCustomTimeVisibility();
         loadTrends();
         setInterval(loadTrends, 60000);
         document.getElementById('apply-time-range').addEventListener('click', renderSelectedRows);

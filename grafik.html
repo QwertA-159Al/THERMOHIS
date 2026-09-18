@@ -154,7 +154,14 @@
                 function cleanup() { clearTimeout(timeout); delete window.google.visualization.Query.setResponse; if (script) script.remove(); }
                 window.google.visualization.Query.setResponse = data => {
                     if (data.status !== 'ok' || !data.table?.rows) { cleanup(); reject(new Error('Google Sheet verisi boş')); return; }
-                    const rows = data.table.rows.map(row => row.c.map(cell => Number(cell?.v) || 0));
+                    const rows = data.table.rows.map(row => {
+                        const cells = row.c.map(cell => cell?.v ?? '');
+                        return {
+                            registers: cells.slice(0, 100).map(value => Number(value) || 0),
+                            date: String(cells[100] ?? '').trim(),
+                            time: String(cells[101] ?? '').trim()
+                        };
+                    });
                     cleanup();
                     resolve(rows);
                 };
@@ -170,7 +177,7 @@
         }
 
         function productionForRow(row, registers) {
-            return registers.reduce((total, register) => total + (row[register - 500] || 0), 0);
+            return registers.reduce((total, register) => total + (row.registers[register - 500] || 0), 0);
         }
 
         function formatElapsedTime(rowCount) {
@@ -180,23 +187,31 @@
             return hours ? `${hours} saat${minutes ? ` ${minutes} dakika` : ''}` : `${minutes} dakika`;
         }
 
+        function formatChartTime(date) {
+            if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+            return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        }
+
         let sheetRows = [];
 
         function renderTrends(rows) {
             const series = machineConfig.map((machine, machineIndex) => {
                 let previous = 0;
+                let hasPrevious = false;
                 const values = rows.map((row, index) => {
+                    if (row.missing) return 0;
                     const current = productionForRow(row, machine[1]);
-                    const produced = index === 0 ? 0 : current >= previous ? current - previous : current;
+                    const produced = !hasPrevious ? 0 : current >= previous ? current - previous : current;
                     previous = current;
+                    hasPrevious = true;
                     return Math.max(0, produced);
                 });
                 return { index: machineIndex, name: machine[0], values };
             });
-            const maximum = Math.max(...series.flatMap(machine => machine.values), 1);
             document.getElementById('trends').innerHTML = series.map(machine => {
                 const total = machine.values.reduce((sum, value) => sum + value, 0);
                 const lastValue = machine.values[machine.values.length - 1] || 0;
+                const maximum = Math.max(...machine.values, 1);
                 const chartWidth = 600;
                 const chartHeight = 210;
                 const padding = 24;
@@ -205,11 +220,38 @@
                 const points = machine.values.map((value, index) => {
                     const x = machine.values.length === 1 ? chartWidth / 2 : padding + index * plotWidth / (machine.values.length - 1);
                     const y = chartHeight - padding - value / maximum * plotHeight;
-                    return { x, y, value, index };
+                    return { x, y, value, index, timestamp: rows[index].timestamp };
                 });
+                const axisTicks = Array.from(
+                    { length: Math.floor(maximum / 10) + 1 },
+                    (_, index) => index * 10
+                );
+                if (axisTicks[axisTicks.length - 1] !== maximum) axisTicks.push(maximum);
+                const labelCount = Math.min(12, axisTicks.length, Math.floor(plotHeight / 20) + 1);
+                const labelIndexes = new Set(Array.from(
+                    { length: labelCount },
+                    (_, index) => Math.round(index * (axisTicks.length - 1) / Math.max(1, labelCount - 1))
+                ));
+                const axisMarkup = axisTicks.map(value => {
+                    const tickIndex = axisTicks.indexOf(value);
+                    const y = chartHeight - padding - value / maximum * plotHeight;
+                    const label = labelIndexes.has(tickIndex)
+                        ? `<text class="trend-axis-label" x="2" y="${y + 4}">${value.toLocaleString('tr-TR')}</text>`
+                        : '';
+                    return `<line class="trend-grid-line" x1="${padding}" y1="${y}" x2="${chartWidth - padding}" y2="${y}"/>${label}`;
+                }).join('');
+                    const timeLabelCount = Math.min(8, points.length);
+                    const timeLabelIndexes = new Set(Array.from(
+                        { length: timeLabelCount },
+                        (_, index) => Math.round(index * (points.length - 1) / Math.max(1, timeLabelCount - 1))
+                    ));
+                    const timeAxisMarkup = points.map((point, index) => {
+                        if (!timeLabelIndexes.has(index)) return '';
+                        return `<line class="trend-grid-line" x1="${point.x}" y1="${padding}" x2="${point.x}" y2="${chartHeight - padding}"/><text class="trend-axis-label" text-anchor="middle" x="${point.x}" y="${chartHeight - 4}">${formatChartTime(point.timestamp)}</text>`;
+                    }).join('');
                 const line = points.map(point => `${point.x},${point.y}`).join(' ');
                 const pointMarkup = points.filter(point => point.value > 0).map(point => `<circle class="trend-point" cx="${point.x}" cy="${point.y}" r="4"><title>${point.index + 1}. 10 dk: ${point.value.toLocaleString('tr-TR')} adet</title></circle>`).join('');
-                const chart = points.length ? `<div class="trend-chart" data-machine-index="${machine.index}"><svg viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${escapeHtml(machine.name)} 10 dakikalık üretim trendi"><line class="trend-grid-line" x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}"/><line class="trend-grid-line" x1="${padding}" y1="${padding}" x2="${chartWidth - padding}" y2="${padding}"/><text class="trend-axis-label" x="2" y="${padding + 4}">${maximum.toLocaleString('tr-TR')}</text><text class="trend-axis-label" x="2" y="${chartHeight / 2 + 4}">${(maximum / 2).toLocaleString('tr-TR')}</text><text class="trend-axis-label" x="2" y="${chartHeight - padding}">0</text><polyline class="trend-line" points="${line}"/>${pointMarkup}</svg></div>` : '<div class="trend-empty">Veri yok</div>';
+                const chart = points.length ? `<div class="trend-chart" data-machine-index="${machine.index}"><svg viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${escapeHtml(machine.name)} 10 dakikalık üretim trendi">${axisMarkup}${timeAxisMarkup}<polyline class="trend-line" points="${line}"/>${pointMarkup}</svg></div>` : '<div class="trend-empty">Veri yok</div>';
                 return `<article class="trend-card"><h2>${escapeHtml(machine.name)}</h2><div class="trend-total">Toplam: ${total.toLocaleString('tr-TR')} adet | Geçen süre: ${formatElapsedTime(machine.values.length)} | Son 10 dk: ${lastValue.toLocaleString('tr-TR')} adet</div>${chart}</article>`;
             }).join('');
             document.getElementById('machine-total').textContent = series.length;
@@ -337,7 +379,7 @@
                 ? setDateTime(dayInput, 8, 0)
                 : setDateTime(dayInput, 18, 0);
             document.getElementById('end-time').value = shift === 'first'
-                ? setDateTime(dayInput, 18, 0)
+                ? setDateTime(dayInput, 18, 1, 0)
                 : setDateTime(dayInput, 8, 0, 1);
         }
 
@@ -356,15 +398,37 @@
             if (!startInput.value) startInput.value = formatDateTimeInput(new Date(now.getTime() - 10 * 60000));
         }
 
+        function parseSheetDateTime(row) {
+            const dateParts = row.date.split(/[./-]/).map(Number);
+            const timeParts = row.time.split(':').map(Number);
+            if (dateParts.length !== 3 || timeParts.length < 2 || dateParts.some(Number.isNaN) || timeParts.slice(0, 2).some(Number.isNaN)) return null;
+            const [day, month, year] = dateParts;
+            const [hour, minute] = timeParts;
+            const result = new Date(year, month - 1, day, hour, minute, 0, 0);
+            return Number.isNaN(result.getTime()) ? null : result;
+        }
+
+        function rowsForTimeRange(start, end) {
+            const rowsByTime = new Map();
+            sheetRows.forEach(row => {
+                const timestamp = parseSheetDateTime(row);
+                if (timestamp) rowsByTime.set(timestamp.getTime(), row);
+            });
+
+            const selectedRows = [];
+            for (let timestamp = start.getTime(); timestamp < end.getTime(); timestamp += 10 * 60000) {
+                const row = rowsByTime.get(timestamp);
+                selectedRows.push(row ? { ...row, timestamp: new Date(timestamp) } : { registers: [], missing: true, timestamp: new Date(timestamp) });
+            }
+            return selectedRows;
+        }
+
         function renderSelectedRows() {
             setDefaultTimeRange();
             const start = new Date(document.getElementById('start-time').value);
             const end = new Date(document.getElementById('end-time').value);
             if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return;
-            const elapsedMinutes = (end - start) / 60000;
-            const requestedCount = Math.max(1, Math.ceil(elapsedMinutes / 10));
-            const rowCount = Math.min(requestedCount, sheetRows.length);
-            renderTrends(sheetRows.slice(-rowCount));
+            renderTrends(rowsForTimeRange(start, end));
         }
 
         setDefaultTimeRange();

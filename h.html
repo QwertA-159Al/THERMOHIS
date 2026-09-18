@@ -24,9 +24,16 @@ main{padding:24px clamp(18px,5vw,64px) 48px}.summary{display:flex;gap:12px;flex-
 <script>
 const SHEET_JSON='https://docs.google.com/spreadsheets/d/1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M/gviz/tq?tqx=out:json&gid=0';
 const machineConfig=[
- ['Boru Çekme',[502,502,502,502,502,502,502,502]],['İç Su Press\'i',[506,506]],['İç İkiye Bölme',[510,510]],['İç Kafa Kesme',[514]],['İç Trim',[522,524]],['İç Ağız Büküm',[528,530]],['İç Alt Form Düz.',[534]],['İç CNC',[542,544]],['Dış Su Press\'i',[548,548]],['Dış İkiye Bölme',[552,552]],['Dış Kafa Kesme',[560]],['Dış Üst Form Düz.',[564]],['Dış Yatay Trim',[568]],['Dış Diş Açma',[572]],['Lazer Kaynak',[575,576]],['İç Kılıf Taban Kaynak',[579]],['Dış Kılıf Taban Kaynak',[582,583]],['Puntalama Makinesi',[586]],['Su Testi',[589]]
+ ['Boru Çekme',[502,502,502,502,502,502,502,502],500,501],['İç Su Press\'i',[506,506],504,505],['İç İkiye Bölme',[510,510],508,509],['İç Kafa Kesme',[514],512,513],['İç Trim',[522,524],520,521],['İç Ağız Büküm',[528,530],526,527],['İç Alt Form Düz.',[534],532,533],['İç CNC',[542,544],540,541],['Dış Su Press\'i',[548,548],546,547],['Dış İkiye Bölme',[552,552],550,551],['Dış Kafa Kesme',[560],558,559],['Dış Üst Form Düz.',[564],562,563],['Dış Yatay Trim',[568],566,567],['Dış Diş Açma',[572],570,571],['Lazer Kaynak',[575,576],573,574],['İç Kılıf Taban Kaynak',[579],577,578],['Dış Kılıf Taban Kaynak',[582,583],580,581],['Puntalama Makinesi',[586],584,585],['Su Testi',[589],587,588]
 ];
 const formatNumber=value=>Number(value).toLocaleString('tr-TR');
+function formatDuration(seconds){
+ const totalSeconds=Math.max(0,Math.floor(Number(seconds)||0));
+ const hours=Math.floor(totalSeconds/3600);
+ const minutes=Math.floor(totalSeconds%3600/60);
+ const remainingSeconds=totalSeconds%60;
+ return [hours,minutes,remainingSeconds].map(value=>String(value).padStart(2,'0')).join(':');
+}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));}
 function loadSheetRow(){
  return new Promise((resolve,reject)=>{
@@ -39,7 +46,7 @@ function loadSheetRow(){
  });
 }
 function render(machines){
- document.getElementById('machines').innerHTML=machines.map(machine=>{const running=Number(machine.adet)>0;return `<article class="card"><h2>${escapeHtml(machine.isim)}</h2><div class="row"><span class="label">Durum</span><span class="${running?'running':'stopped'}">${running?'Çalışıyor':'Duruyor'}</span></div><div class="row"><span class="label">Üretim adedi</span><span class="count">${formatNumber(machine.adet)}</span></div></article>`}).join('');
+ document.getElementById('machines').innerHTML=machines.map(machine=>{const running=Number(machine.adet)>0;return `<article class="card"><h2>${escapeHtml(machine.isim)}</h2><div class="row"><span class="label">Durum</span><span class="${running?'running':'stopped'}">${running?'Çalışıyor':'Duruyor'}</span></div><div class="row"><span class="label">Üretim adedi</span><span class="count">${formatNumber(machine.adet)}</span></div><div class="row"><span class="label">Çalışma Zamanı</span><span>${formatDuration(machine.calisma)}</span></div><div class="row"><span class="label">Durma Zamanı</span><span>${formatDuration(machine.durma)}</span></div></article>`}).join('');
  document.getElementById('machine-total').textContent=machines.length;
  document.getElementById('running-total').textContent=machines.filter(machine=>Number(machine.adet)>0).length;
  document.getElementById('production-total').textContent=formatNumber(machines.reduce((total,machine)=>total+Number(machine.adet||0),0));
@@ -50,7 +57,7 @@ async function update(){
  try{
     const cells=await loadSheetRow();
   const registers={};for(let index=0;index<=100;index++){const raw=String(cells[index]??'').trim().replace(',','.');registers[500+index]=raw===''?0:Number(raw)||0;}
-  render(machineConfig.map((machine,id)=>({id,isim:machine[0],adet:machine[1].reduce((total,register)=>total+registers[register],0)})));
+  render(machineConfig.map((machine,id)=>({id,isim:machine[0],adet:machine[1].reduce((total,register)=>total+registers[register],0),calisma:registers[machine[2]],durma:registers[machine[3]]})));
  }catch(error){document.getElementById('notice').textContent='Google Sheet okunamadı. Sheet paylaşımını "Bağlantıya sahip herkes: Görüntüleyici" yapın.';}
 }
 update();setInterval(update,3000);

@@ -66,14 +66,22 @@
         .trend-point { fill: var(--yellow); stroke: var(--blue); stroke-width: 2; }
         .trend-empty { color: var(--muted); padding: 20px 0; }
         .error { color: var(--red); padding: 18px; border: 1px solid #713047; background: #2a1724; border-radius: 9px; }
-        .chart-modal { display: none; position: fixed; inset: 0; z-index: 10; align-items: center; justify-content: center; padding: 24px; background: rgba(4, 9, 18, .86); }
+        .chart-modal { display: none; position: fixed; inset: 0; z-index: 10; flex-direction: column; padding: 20px clamp(16px, 4vw, 56px); background: var(--background); }
         .chart-modal.open { display: flex; }
-        .chart-modal-content { width: min(1100px, 100%); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; padding: 22px; }
+        .chart-modal-content { display: flex; flex: 1; min-height: 0; flex-direction: column; width: 100%; }
         .chart-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-        .chart-modal-header h2 { margin: 0; font-size: 22px; }
+        .chart-modal-header h2 { margin: 0; color: var(--blue); font-size: clamp(20px, 3vw, 30px); }
+        .chart-modal-actions { display: flex; align-items: center; gap: 8px; }
+        .chart-modal-zoom { display: flex; gap: 6px; }
+        .chart-modal-zoom button { min-width: 42px; border: 1px solid var(--panel-border); border-radius: 7px; background: var(--panel); color: var(--text); padding: 8px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+        .chart-modal-zoom button:hover { border-color: var(--blue); color: var(--blue); }
         .chart-modal-close { border: 1px solid var(--blue); border-radius: 7px; background: transparent; color: var(--blue); padding: 8px 14px; font: inherit; font-weight: 700; cursor: pointer; }
         .chart-modal-close:hover { background: var(--blue); color: #06101e; }
-        .chart-modal .trend-chart { height: min(60vh, 480px); cursor: default; }
+        .chart-modal .trend-chart { flex: 1; min-height: 0; height: auto; border: 1px solid var(--panel-border); border-radius: 10px; background: #0b1728; cursor: grab; overflow: hidden; touch-action: none; }
+        #chart-modal-body { display: flex; flex: 1; min-height: 0; }
+        .chart-modal .trend-chart:active { cursor: grabbing; }
+        .chart-modal .trend-chart svg { transform-origin: center; will-change: transform; user-select: none; }
+        .chart-modal-help { color: var(--muted); margin: 10px 0 0; font-size: 13px; text-align: center; }
 
         @media (max-width: 600px) {
             header { display: block; padding: 22px 16px 16px; }
@@ -88,11 +96,13 @@
             .trend-grid { grid-template-columns: minmax(0, 1fr); }
             .trend-card { min-width: 0; padding: 14px; }
             .trend-total { line-height: 1.5; }
-            .chart-modal { padding: 10px; }
-            .chart-modal-content { max-height: 90vh; overflow: auto; padding: 14px; }
+            .chart-modal { padding: 14px 10px 12px; }
             .chart-modal-header { align-items: flex-start; }
             .chart-modal-header h2 { font-size: 18px; }
+            .chart-modal-actions { align-items: flex-end; flex-direction: column; }
+            .chart-modal-zoom button { min-width: 38px; padding: 7px 9px; }
             .chart-modal-close { flex: 0 0 auto; }
+            .chart-modal-help { font-size: 12px; }
         }
     </style>
 </head>
@@ -118,8 +128,9 @@
     </main>
     <div class="chart-modal" id="chart-modal" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
         <div class="chart-modal-content">
-            <div class="chart-modal-header"><h2 id="chart-modal-title"></h2><button class="chart-modal-close" type="button" id="close-chart-modal">Kapat</button></div>
+            <div class="chart-modal-header"><h2 id="chart-modal-title"></h2><div class="chart-modal-actions"><div class="chart-modal-zoom" aria-label="Grafik yakınlaştırma"><button type="button" id="zoom-out" aria-label="Uzaklaştır">-</button><button type="button" id="zoom-reset">Sıfırla</button><button type="button" id="zoom-in" aria-label="Yakınlaştır">+</button></div><button class="chart-modal-close" type="button" id="close-chart-modal">Kapat</button></div></div>
             <div id="chart-modal-body"></div>
+            <p class="chart-modal-help">Grafiği sürükleyin. Yakınlaştırmak için +/-, fare tekerleği veya iki parmağı kullanın.</p>
         </div>
     </div>
 
@@ -206,11 +217,75 @@
             document.getElementById('updated').textContent = 'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
         }
 
+        function setupChartViewport() {
+            const viewport = document.querySelector('#chart-modal-body .trend-chart');
+            const svg = viewport?.querySelector('svg');
+            if (!viewport || !svg) return;
+            let scale = 1;
+            let offsetX = 0;
+            let offsetY = 0;
+            let dragStart;
+            const pointers = new Map();
+            let pinchStartDistance = 0;
+            let pinchStartScale = 1;
+
+            function applyTransform() {
+                svg.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            }
+
+            function setScale(nextScale) {
+                scale = Math.min(4, Math.max(.6, nextScale));
+                applyTransform();
+            }
+
+            function distanceBetweenPointers() {
+                const [first, second] = [...pointers.values()];
+                return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+            }
+
+            viewport.addEventListener('wheel', event => {
+                event.preventDefault();
+                setScale(scale * (event.deltaY < 0 ? 1.12 : .9));
+            }, { passive: false });
+            viewport.addEventListener('pointerdown', event => {
+                viewport.setPointerCapture(event.pointerId);
+                pointers.set(event.pointerId, event);
+                if (pointers.size === 1) dragStart = { x: event.clientX - offsetX, y: event.clientY - offsetY };
+                if (pointers.size === 2) {
+                    pinchStartDistance = distanceBetweenPointers();
+                    pinchStartScale = scale;
+                }
+            });
+            viewport.addEventListener('pointermove', event => {
+                if (!pointers.has(event.pointerId)) return;
+                pointers.set(event.pointerId, event);
+                if (pointers.size === 2 && pinchStartDistance) {
+                    setScale(pinchStartScale * distanceBetweenPointers() / pinchStartDistance);
+                } else if (pointers.size === 1 && dragStart) {
+                    offsetX = event.clientX - dragStart.x;
+                    offsetY = event.clientY - dragStart.y;
+                    applyTransform();
+                }
+            });
+            function releasePointer(event) {
+                pointers.delete(event.pointerId);
+                if (pointers.size < 2) pinchStartDistance = 0;
+                if (!pointers.size) dragStart = null;
+            }
+            viewport.addEventListener('pointerup', releasePointer);
+            viewport.addEventListener('pointercancel', releasePointer);
+            document.getElementById('zoom-in').onclick = () => setScale(scale + .2);
+            document.getElementById('zoom-out').onclick = () => setScale(scale - .2);
+            document.getElementById('zoom-reset').onclick = () => { scale = 1; offsetX = 0; offsetY = 0; applyTransform(); };
+            applyTransform();
+        }
+
         function openChartModal(chart, machineName) {
             document.getElementById('trends').classList.add('modal-open');
             document.getElementById('chart-modal-title').textContent = machineName;
             document.getElementById('chart-modal-body').innerHTML = chart.outerHTML;
             document.getElementById('chart-modal').classList.add('open');
+            setupChartViewport();
         }
 
         function closeChartModal() {
@@ -300,6 +375,7 @@
         });
         document.getElementById('close-chart-modal').addEventListener('click', closeChartModal);
         document.getElementById('chart-modal').addEventListener('click', event => { if (event.target.id === 'chart-modal') closeChartModal(); });
+        document.addEventListener('keydown', event => { if (event.key === 'Escape') closeChartModal(); });
     </script>
 </body>
 </html>

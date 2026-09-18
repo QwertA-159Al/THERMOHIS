@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>THERMOHIS Üretim Takip</title>
+    <style>
+        :root {
+            --background: #08111f;
+            --panel: #111c2e;
+            --panel-border: #22334d;
+            --text: #e5edf7;
+            --muted: #8fa3bb;
+            --blue: #55a7ff;
+            --green: #35d399;
+            --red: #fb7185;
+            --yellow: #f6c453;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top right, #123254 0, var(--background) 42%);
+            color: var(--text);
+            font-family: "Segoe UI", sans-serif;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: end;
+            gap: 20px;
+            padding: 28px clamp(18px, 5vw, 64px) 20px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        h1 { margin: 0; color: var(--blue); font-size: clamp(24px, 4vw, 40px); }
+        .subtitle, .updated { color: var(--muted); margin: 7px 0 0; }
+        .updated { white-space: nowrap; font-size: 13px; }
+        .back-button { border: 1px solid var(--blue); border-radius: 7px; background: transparent; color: var(--blue); padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer; }
+        .back-button:hover { background: var(--blue); color: #06101e; }
+
+        main { padding: 24px clamp(18px, 5vw, 64px) 48px; }
+        .summary { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+        .summary-item { background: var(--panel); border: 1px solid var(--panel-border); padding: 12px 16px; border-radius: 9px; }
+        .summary-label { color: var(--muted); font-size: 13px; margin-right: 8px; }
+        .summary-value { font-weight: 700; }
+        .row-selector { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: 13px; }
+        .row-selector input, .row-selector select { width: 180px; border: 1px solid var(--panel-border); border-radius: 7px; background: var(--panel); color: var(--text); padding: 10px; font: inherit; }
+        .row-selector button { border: 1px solid var(--blue); border-radius: 7px; background: var(--blue); color: #06101e; padding: 10px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+        .row-selector button:hover { background: #8bc5ff; }
+
+        .trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+        .trend-grid.modal-open { display: none; }
+        .trend-card { background: rgba(17, 28, 46, .94); border: 1px solid var(--panel-border); border-radius: 10px; padding: 18px; }
+        .trend-card h2 { margin: 0 0 6px; font-size: 18px; }
+        .trend-total { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+        .trend-chart { height: 220px; border-bottom: 1px solid var(--panel-border); }
+        .trend-chart { cursor: zoom-in; }
+        .trend-chart svg { display: block; width: 100%; height: 100%; }
+        .trend-grid-line { stroke: var(--panel-border); stroke-width: 1; }
+        .trend-axis-label { fill: var(--muted); font-size: 12px; }
+        .trend-line { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+        .trend-point { fill: var(--yellow); stroke: var(--blue); stroke-width: 2; }
+        .trend-empty { color: var(--muted); padding: 20px 0; }
+        .error { color: var(--red); padding: 18px; border: 1px solid #713047; background: #2a1724; border-radius: 9px; }
+        .chart-modal { display: none; position: fixed; inset: 0; z-index: 10; align-items: center; justify-content: center; padding: 24px; background: rgba(4, 9, 18, .86); }
+        .chart-modal.open { display: flex; }
+        .chart-modal-content { width: min(1100px, 100%); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 10px; padding: 22px; }
+        .chart-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+        .chart-modal-header h2 { margin: 0; font-size: 22px; }
+        .chart-modal-close { border: 1px solid var(--blue); border-radius: 7px; background: transparent; color: var(--blue); padding: 8px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+        .chart-modal-close:hover { background: var(--blue); color: #06101e; }
+        .chart-modal .trend-chart { height: min(60vh, 480px); cursor: default; }
+
+        @media (max-width: 600px) {
+            header { display: block; }
+            .updated { margin-top: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>THERMOHIS</h1>
+            <p class="subtitle">Canlı üretim takip paneli</p>
+        </div>
+        <div>
+            <button class="back-button" type="button" onclick="location.href='h.html'">Geri</button>
+            <p class="updated" id="updated">Veriler bekleniyor...</p>
+        </div>
+    </header>
+
+    <main>
+        <section class="summary" aria-label="Özet">
+            <div class="summary-item"><span class="summary-label">Makine</span><span class="summary-value" id="machine-total">-</span></div>
+            <div class="summary-item"><span class="summary-label">Toplam 10 dk üretim</span><span class="summary-value" id="production-total">-</span></div>
+            <div class="row-selector"><label for="selected-day">Gün</label><input id="selected-day" type="date"><label for="shift">Vardiya</label><select id="shift"><option value="first">1. Vardiya (08:00-18:00)</option><option value="second">2. Vardiya (18:00-08:00)</option><option value="custom">Özel zaman</option></select><label for="start-time">Başlangıç</label><input id="start-time" type="datetime-local" step="600"><label for="end-time">Bitiş</label><input id="end-time" type="datetime-local" step="600"><button type="button" id="apply-time-range">Uygula</button></div>
+        </section>
+        <section class="trend-grid" id="trends" aria-live="polite"></section>
+    </main>
+    <div class="chart-modal" id="chart-modal" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
+        <div class="chart-modal-content">
+            <div class="chart-modal-header"><h2 id="chart-modal-title"></h2><button class="chart-modal-close" type="button" id="close-chart-modal">Kapat</button></div>
+            <div id="chart-modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        const SHEET_JSON = 'https://docs.google.com/spreadsheets/d/1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M/gviz/tq?tqx=out:json&gid=0';
+        const machineConfig = [
+            ['Boru Çekme', [502, 502, 502, 502, 502, 502, 502, 502]], ['İç Su Press\'i', [506, 506]], ['İç İkiye Bölme', [510, 510]],
+            ['İç Kafa Kesme', [514]], ['İç Trim', [522, 524]], ['İç Ağız Büküm', [528, 530]], ['İç Alt Form Düz.', [534]],
+            ['İç CNC', [542, 544]], ['Dış Su Press\'i', [548, 548]], ['Dış İkiye Bölme', [552, 552]], ['Dış Kafa Kesme', [560]],
+            ['Dış Üst Form Düz.', [564]], ['Dış Yatay Trim', [568]], ['Dış Diş Açma', [572]], ['Lazer Kaynak', [575, 576]],
+            ['İç Kılıf Taban Kaynak', [579]], ['Dış Kılıf Taban Kaynak', [582, 583]], ['Puntalama Makinesi', [586]], ['Su Testi', [589]]
+        ];
+
+        function loadSheetRows() {
+            return new Promise((resolve, reject) => {
+                window.google = window.google || {};
+                window.google.visualization = window.google.visualization || {};
+                window.google.visualization.Query = window.google.visualization.Query || {};
+                let script;
+                const timeout = setTimeout(() => { cleanup(); reject(new Error('Google Sheet zaman aşımı')); }, 15000);
+                function cleanup() { clearTimeout(timeout); delete window.google.visualization.Query.setResponse; if (script) script.remove(); }
+                window.google.visualization.Query.setResponse = data => {
+                    if (data.status !== 'ok' || !data.table?.rows) { cleanup(); reject(new Error('Google Sheet verisi boş')); return; }
+                    const rows = data.table.rows.map(row => row.c.map(cell => Number(cell?.v) || 0));
+                    cleanup();
+                    resolve(rows);
+                };
+                script = document.createElement('script');
+                script.src = SHEET_JSON + '&t=' + Date.now();
+                script.onerror = () => { cleanup(); reject(new Error('Google Sheet bağlantısı kurulamadı')); };
+                document.head.appendChild(script);
+            });
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+        }
+
+        function productionForRow(row, registers) {
+            return registers.reduce((total, register) => total + (row[register - 500] || 0), 0);
+        }
+
+        function formatElapsedTime(rowCount) {
+            const totalMinutes = rowCount * 10;
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return hours ? `${hours} saat${minutes ? ` ${minutes} dakika` : ''}` : `${minutes} dakika`;
+        }
+
+        let sheetRows = [];
+
+        function renderTrends(rows) {
+            const series = machineConfig.map((machine, machineIndex) => {
+                let previous = 0;
+                const values = rows.map((row, index) => {
+                    const current = productionForRow(row, machine[1]);
+                    const produced = index === 0 ? 0 : current >= previous ? current - previous : current;
+                    previous = current;
+                    return Math.max(0, produced);
+                });
+                return { index: machineIndex, name: machine[0], values };
+            });
+            const maximum = Math.max(...series.flatMap(machine => machine.values), 1);
+            document.getElementById('trends').innerHTML = series.map(machine => {
+                const total = machine.values.reduce((sum, value) => sum + value, 0);
+                const lastValue = machine.values[machine.values.length - 1] || 0;
+                const chartWidth = 600;
+                const chartHeight = 210;
+                const padding = 24;
+                const plotWidth = chartWidth - padding * 2;
+                const plotHeight = chartHeight - padding * 2;
+                const points = machine.values.map((value, index) => {
+                    const x = machine.values.length === 1 ? chartWidth / 2 : padding + index * plotWidth / (machine.values.length - 1);
+                    const y = chartHeight - padding - value / maximum * plotHeight;
+                    return { x, y, value, index };
+                });
+                const line = points.map(point => `${point.x},${point.y}`).join(' ');
+                const pointMarkup = points.filter(point => point.value > 0).map(point => `<circle class="trend-point" cx="${point.x}" cy="${point.y}" r="4"><title>${point.index + 1}. 10 dk: ${point.value.toLocaleString('tr-TR')} adet</title></circle>`).join('');
+                const chart = points.length ? `<div class="trend-chart" data-machine-index="${machine.index}"><svg viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="${escapeHtml(machine.name)} 10 dakikalık üretim trendi"><line class="trend-grid-line" x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}"/><line class="trend-grid-line" x1="${padding}" y1="${padding}" x2="${chartWidth - padding}" y2="${padding}"/><text class="trend-axis-label" x="2" y="${padding + 4}">${maximum.toLocaleString('tr-TR')}</text><text class="trend-axis-label" x="2" y="${chartHeight / 2 + 4}">${(maximum / 2).toLocaleString('tr-TR')}</text><text class="trend-axis-label" x="2" y="${chartHeight - padding}">0</text><polyline class="trend-line" points="${line}"/>${pointMarkup}</svg></div>` : '<div class="trend-empty">Veri yok</div>';
+                return `<article class="trend-card"><h2>${escapeHtml(machine.name)}</h2><div class="trend-total">Toplam: ${total.toLocaleString('tr-TR')} adet | Geçen süre: ${formatElapsedTime(machine.values.length)} | Son 10 dk: ${lastValue.toLocaleString('tr-TR')} adet</div>${chart}</article>`;
+            }).join('');
+            document.getElementById('machine-total').textContent = series.length;
+            document.getElementById('production-total').textContent = series.reduce((sum, machine) => sum + machine.values.reduce((total, value) => total + value, 0), 0).toLocaleString('tr-TR');
+            document.getElementById('updated').textContent = 'Son güncelleme: ' + new Date().toLocaleTimeString('tr-TR');
+        }
+
+        function openChartModal(chart, machineName) {
+            document.getElementById('trends').classList.add('modal-open');
+            document.getElementById('chart-modal-title').textContent = machineName;
+            document.getElementById('chart-modal-body').innerHTML = chart.outerHTML;
+            document.getElementById('chart-modal').classList.add('open');
+        }
+
+        function closeChartModal() {
+            document.getElementById('trends').classList.remove('modal-open');
+            document.getElementById('chart-modal').classList.remove('open');
+            document.getElementById('chart-modal-body').innerHTML = '';
+        }
+
+        async function loadTrends() {
+            try {
+                sheetRows = await loadSheetRows();
+                renderSelectedRows();
+            } catch (error) {
+                document.getElementById('trends').innerHTML = '<div class="error">Google Sheet verileri alınamadı. Sheet paylaşımını kontrol edin.</div>';
+            }
+        }
+
+        function formatDateTimeInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        function formatDateInput(date) {
+            return formatDateTimeInput(date).slice(0, 10);
+        }
+
+        function setDateTime(dateInput, hour, minute, dayOffset = 0) {
+            const date = new Date(`${dateInput.value}T00:00`);
+            date.setDate(date.getDate() + dayOffset);
+            date.setHours(hour, minute, 0, 0);
+            return formatDateTimeInput(date);
+        }
+
+        function applyShiftTimes() {
+            const dayInput = document.getElementById('selected-day');
+            const shift = document.getElementById('shift').value;
+            if (!dayInput.value || shift === 'custom') return;
+            document.getElementById('start-time').value = shift === 'first'
+                ? setDateTime(dayInput, 8, 0)
+                : setDateTime(dayInput, 18, 0);
+            document.getElementById('end-time').value = shift === 'first'
+                ? setDateTime(dayInput, 18, 0)
+                : setDateTime(dayInput, 8, 0, 1);
+        }
+
+        function setDefaultTimeRange() {
+            const dayInput = document.getElementById('selected-day');
+            const startInput = document.getElementById('start-time');
+            const endInput = document.getElementById('end-time');
+            const now = new Date();
+            now.setMinutes(Math.floor(now.getMinutes() / 10) * 10, 0, 0);
+            if (!dayInput.value) dayInput.value = formatDateInput(now);
+            if (!startInput.value && !endInput.value) {
+                document.getElementById('shift').value = 'first';
+                applyShiftTimes();
+            }
+            if (!endInput.value) endInput.value = formatDateTimeInput(now);
+            if (!startInput.value) startInput.value = formatDateTimeInput(new Date(now.getTime() - 10 * 60000));
+        }
+
+        function renderSelectedRows() {
+            setDefaultTimeRange();
+            const start = new Date(document.getElementById('start-time').value);
+            const end = new Date(document.getElementById('end-time').value);
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return;
+            const elapsedMinutes = (end - start) / 60000;
+            const requestedCount = Math.max(1, Math.ceil(elapsedMinutes / 10));
+            const rowCount = Math.min(requestedCount, sheetRows.length);
+            renderTrends(sheetRows.slice(-rowCount));
+        }
+
+        setDefaultTimeRange();
+        loadTrends();
+        setInterval(loadTrends, 60000);
+        document.getElementById('apply-time-range').addEventListener('click', renderSelectedRows);
+        document.getElementById('selected-day').addEventListener('change', applyShiftTimes);
+        document.getElementById('shift').addEventListener('change', applyShiftTimes);
+        document.getElementById('trends').addEventListener('click', event => {
+            const chart = event.target.closest('.trend-chart');
+            if (!chart) return;
+            const machine = machineConfig[Number(chart.dataset.machineIndex)];
+            openChartModal(chart, machine[0]);
+        });
+        document.getElementById('close-chart-modal').addEventListener('click', closeChartModal);
+        document.getElementById('chart-modal').addEventListener('click', event => { if (event.target.id === 'chart-modal') closeChartModal(); });
+    </script>
+</body>
+</html>

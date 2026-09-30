@@ -63,7 +63,7 @@
         .trend-grid-line { stroke: var(--panel-border); stroke-width: 1; }
         .trend-axis-label { fill: var(--muted); font-size: 12px; }
         .trend-line { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-        .trend-point { fill: var(--yellow); stroke: var(--blue); stroke-width: 1; }
+        .trend-point { fill: var(--yellow); stroke: var(--blue); stroke-width: 2; }
         .trend-empty { color: var(--muted); padding: 20px 0; }
         .error { color: var(--red); padding: 18px; border: 1px solid #713047; background: #2a1724; border-radius: 9px; }
         .chart-modal { display: none; position: fixed; inset: 0; z-index: 10; flex-direction: column; padding: 20px clamp(16px, 4vw, 56px); background: var(--background); }
@@ -113,8 +113,8 @@
             <p class="subtitle">Canlı üretim takip paneli</p>
         </div>
         <div>
-            <button class="back-button" type="button" onclick="location.href='index.html'">Geri</button>
-            <button class="back-button" type="button" onclick="location.href='grafik 2.html'">Sayfa 2</button>
+            <button class="back-button" type="button" onclick="location.href='grafik.html'">Geri</button>
+            <button class="back-button" type="button" onclick="location.href='grafik 2.html'">Yenile</button>
             <p class="updated" id="updated">Veriler bekleniyor...</p>
         </div>
     </header>
@@ -140,11 +140,11 @@
         const MAKAD_JSON = 'https://docs.google.com/spreadsheets/d/1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M/gviz/tq?tqx=out:json&sheet=MakAd&headers=1';
         // Yedek liste: "MakAd" sayfasına erişilemezse kullanılır.
         const DEFAULT_MACHINE_CONFIG = [
-            ['Boru Çekme', [502, 502, 502, 502, 502, 502, 502, 502], 500, 501], ['İç Su Press\'i', [506, 506], 504, 505], ['İç İkiye Bölme', [510, 510], 508, 509],
-            ['İç Kafa Kesme', [514], 512, 513], ['İç Trim', [522, 524], 520, 521], ['İç Ağız Büküm', [528, 530], 526, 527], ['İç Alt Form Düz.', [534], 532, 533],
-            ['İç CNC', [542, 544], 540, 541], ['Dış Su Press\'i', [548, 548], 546, 547], ['Dış İkiye Bölme', [552, 552], 550, 551], ['Dış Kafa Kesme', [560], 558, 559],
-            ['Dış Üst Form Düz.', [564], 562, 563], ['Dış Yatay Trim', [568], 566, 567], ['Dış Diş Açma', [572], 570, 571], ['Lazer Kaynak', [575, 576], 573, 574],
-            ['İç Kılıf Taban Kaynak', [579], 577, 578], ['Dış Kılıf Taban Kaynak', [582, 583], 580, 581], ['Puntalama Makinesi', [586], 584, 585], ['Su Testi', [589], 587, 588]
+            ['Boru Çekme', [502, 502, 502, 502, 502, 502, 502, 502], [500], [501]], ['İç Su Press\'i', [506, 506], [504], [505]], ['İç İkiye Bölme', [510, 510], [508], [509]],
+            ['İç Kafa Kesme', [514], [512], [513]], ['İç Trim', [522, 524], [520], [521]], ['İç Ağız Büküm', [528, 530], [526], [527]], ['İç Alt Form Düz.', [534], [532], [533]],
+            ['İç CNC', [542, 544], [540], [541]], ['Dış Su Press\'i', [548, 548], [546], [547]], ['Dış İkiye Bölme', [552, 552], [550], [551]], ['Dış Kafa Kesme', [560], [558], [559]],
+            ['Dış Üst Form Düz.', [564], [562], [563]], ['Dış Yatay Trim', [568], [566], [567]], ['Dış Diş Açma', [572], [570], [571]], ['Lazer Kaynak', [575, 576], [573], [574]],
+            ['İç Kılıf Taban Kaynak', [579], [577], [578]], ['Dış Kılıf Taban Kaynak', [582, 583], [580], [581]], ['Puntalama Makinesi', [586], [584], [585]], ['Su Testi', [589], [587], [588]]
         ];
         let machineConfig = DEFAULT_MACHINE_CONFIG;
         function parseRegisterAddresses(value) {
@@ -167,7 +167,7 @@
                         const sheetRegisters = parseRegisterAddresses(cells[1]);
                         const registers = sheetRegisters.length ? sheetRegisters : (fallback?.[1] || []);
                         const calisma = Number(cells[2]) || 0, durma = Number(cells[3]) || 0;
-                        return [isim, registers, calisma, durma];
+                        return [isim, registers, [calisma], [durma]];
                     }).filter(machine => machine[0] !== '' && machine[1].length > 0);
                     cleanup();
                     if (config.length === 0) { reject(new Error('MakAd sheet verisi boş')); return; }
@@ -213,7 +213,7 @@
         }
 
         function productionForRow(row, registers) {
-            return registers.reduce((total, register) => total + (row.registers[register - 500] || 0), 0);
+            return registers.reduce((total, register) => total + (row.registers[register - 500]/6 || 0), 0);
         }
 
         function formatElapsedTime(rowCount) {
@@ -257,7 +257,7 @@
                 let hasPrevious = false;
                 const values = rows.map((row, index) => {
                     if (row.missing) return 0;
-                    const current = productionForRow(row, machine[1]);
+                    const current = productionForRow(row, machine[2]);
                     const produced = !hasPrevious ? 0 : current >= previous ? current - previous : current;
                     previous = current;
                     hasPrevious = true;

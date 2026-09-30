@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THERMOHIS Personel Takipi</title>
+<style>
+:root{--bg:#08111f;--panel:#111c2e;--border:#22334d;--text:#e5edf7;--muted:#8fa3bb;--blue:#55a7ff;--green:#35d399;--red:#fb7185;--yellow:#f6c453}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#123254 0,var(--bg) 42%);color:var(--text);font-family:"Segoe UI",sans-serif}
+header{display:flex;justify-content:space-between;align-items:end;gap:20px;padding:28px clamp(18px,5vw,64px) 20px;border-bottom:1px solid var(--border)}
+h1{margin:0;color:var(--blue);font-size:clamp(24px,4vw,40px)}p{margin:7px 0}.muted{color:var(--muted)}
+main{padding:24px clamp(18px,5vw,64px) 48px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:22px}
+.filters{display:flex;gap:14px;flex-wrap:wrap;align-items:end}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{color:var(--muted);font-size:13px}
+select,input[type="date"],input[type="time"]{background:#0c1626;border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:7px;font:inherit;min-width:200px}
+input[type="time"]{min-width:120px}
+.back-button,.show-button{border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:#06101e;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}
+.back-button{background:transparent;color:var(--blue)}
+.back-button:hover{background:#1a2c46}
+.show-button:hover{background:#8bc5ff}
+.notice{padding:14px;background:#18263b;border:1px solid var(--border);border-radius:9px;color:var(--muted);margin-bottom:20px}
+.summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.summary-item{background:#0c1626;border:1px solid var(--border);padding:10px 14px;border-radius:8px}
+.summary-label{color:var(--muted);font-size:13px;margin-right:8px}
+.summary-value{font-weight:700;color:var(--yellow)}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-size:13px;font-weight:600}
+tr:hover td{background:#0f1c30}
+@media(max-width:600px){
+ header{display:block;padding:22px 16px 16px}
+ main{padding:18px 16px 32px}
+ .filters{flex-direction:column;align-items:stretch}
+ select,input[type="date"],input[type="time"]{min-width:0;width:100%}
+ .show-button,.back-button{width:100%}
+ table{font-size:14px}
+ th,td{padding:8px 6px}
+}
+</style>
+</head>
+<body>
+<header>
+ <div><h1>THERMOHIS</h1><p class="muted">Personel Takibi</p></div>
+ <button class="back-button" type="button" onclick="location.href='index.html'">Panele Dön</button>
+</header>
+<main>
+<div class="panel">
+ <div class="filters">
+  <div class="field">
+   <label for="personnelSelect">Personel</label>
+   <select id="personnelSelect"><option value="">Yükleniyor...</option></select>
+  </div>
+  <div class="field">
+   <label for="startDate">Başlangıç Tarihi</label>
+   <input type="date" id="startDate">
+  </div>
+  <div class="field">
+   <label for="startTime">Başlangıç Saati</label>
+   <input type="time" id="startTime">
+  </div>
+  <div class="field">
+   <label for="endDate">Bitiş Tarihi</label>
+   <input type="date" id="endDate">
+  </div>
+  <div class="field">
+   <label for="endTime">Bitiş Saati</label>
+   <input type="time" id="endTime">
+  </div>
+  <button class="show-button" type="button" id="showBtn">Göster</button>
+ </div>
+</div>
+<div class="notice" id="notice">Personel ve OPYER verileri yükleniyor...</div>
+<div class="panel" id="resultPanel" style="display:none">
+ <div class="summary">
+  <div class="summary-item"><span class="summary-label">Toplam Dönem</span><span class="summary-value" id="totalCount">0</span></div>
+  <div class="summary-item"><span class="summary-label">Çalışılan Makine Sayısı</span><span class="summary-value" id="machineCount">0</span></div>
+ </div>
+ <table>
+  <thead><tr><th>Başlangıç</th><th>Bitiş</th><th>Makine</th><th>Toplam Üretim</th><th>Çalışma Süresi</th><th>Durma Süresi</th><th>Çevrim Süresi</th></tr></thead>
+  <tbody id="resultBody"></tbody>
+ </table>
+</div>
+</main>
+<script>
+const SPREADSHEET_ID='1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M';
+const PERSONNEL_SHEET_NAME='Personel';
+const OPYER_SHEET_NAME='OPYER';
+const PERSONNEL_JSON='https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(PERSONNEL_SHEET_NAME);
+const OPYER_JSON='https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(OPYER_SHEET_NAME);
+const SHEET_JSON='https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/gviz/tq?tqx=out:json&gid=0';
+const MAKAD_SHEET_NAME='MakAd';
+const MAKAD_JSON='https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(MAKAD_SHEET_NAME)+'&headers=1';
+// Yedek liste: "MakAd" sayfasına erişilemezse kullanılır.
+const DEFAULT_MACHINE_CONFIG=[
+ ['Boru Çekme',[502,502,502,502,502,502,502,502],500,501],['İç Su Press\'i',[506,506],504,505],['İç İkiye Bölme',[510,510],508,509],['İç Kafa Kesme',[514],512,513],['İç Trim',[522,524],520,521],['İç Ağız Büküm',[528,530],526,527],['İç Alt Form Düz.',[534],532,533],['İç CNC',[542,544],540,541],['Dış Su Press\'i',[548,548],546,547],['Dış İkiye Bölme',[552,552],550,551],['Dış Kafa Kesme',[560],558,559],['Dış Üst Form Düz.',[564],562,563],['Dış Yatay Trim',[568],566,567],['Dış Diş Açma',[572],570,571],['Lazer Kaynak',[575,576],573,574],['İç Kılıf Taban Kaynak',[579],577,578],['Dış Kılıf Taban Kaynak',[582,583],580,581],['Puntalama Makinesi',[586],584,585],['Su Testi',[589],587,588]
+];
+let machineConfig=DEFAULT_MACHINE_CONFIG;
+
+function escapeHtml(value){return String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));}
+function formatNumber(value){return Number(value).toLocaleString('tr-TR');}
+function parseRegisterAddresses(value){
+ return String(value??'').match(/\d+/g)?.map(Number).filter(address=>Number.isFinite(address)&&address>0)||[];
+}
+
+let sheetJsonQueue=Promise.resolve();
+function loadSheetJson(url,emptyError,timeoutError,connectionError){
+ const request=sheetJsonQueue.then(()=>new Promise((resolve,reject)=>{
+  window.google=window.google||{};window.google.visualization=window.google.visualization||{};window.google.visualization.Query=window.google.visualization.Query||{};
+  let script=null;
+  const timeout=setTimeout(()=>{cleanup();reject(Error(timeoutError));},30000);
+  function cleanup(){clearTimeout(timeout);delete window.google.visualization.Query.setResponse;if(script)script.remove();}
+  window.google.visualization.Query.setResponse=data=>{
+   if(data.status!=='ok'||!data.table){cleanup();reject(Error(emptyError));return;}
+   cleanup();resolve(data.table);
+  };
+  script=document.createElement('script');
+  script.src=url+'&t='+Date.now();
+  script.onerror=()=>{cleanup();reject(Error(connectionError));};
+  document.head.appendChild(script);
+ }));
+ sheetJsonQueue=request.then(()=>undefined,()=>undefined);
+ return request;
+}
+
+function loadMachineConfig(){
+ return loadSheetJson(MAKAD_JSON,'MakAd sheet verisi boş','MakAd sheet zaman aşımı','MakAd sheet bağlantısı kurulamadı')
+  .then(table=>{
+   const config=(table.rows||[]).map(row=>{
+    const cells=(row.c||[]).map(cell=>cell?.v??'');
+    const isim=String(cells[0]??'').trim();
+    const fallback=DEFAULT_MACHINE_CONFIG.find(machine=>machine[0]===isim);
+    const sheetRegisters=parseRegisterAddresses(cells[1]);
+    const registers=sheetRegisters.length?sheetRegisters:(fallback?.[1]||[]);
+    const calisma=Number(cells[2])||0,durma=Number(cells[3])||0;
+    return [isim,registers,calisma,durma];
+   }).filter(machine=>machine[0]!==''&&machine[1].length>0);
+   if(config.length===0)throw Error('MakAd sheet verisi boş');
+   const configuredByName=new Map(config.map(machine=>[machine[0],machine]));
+   const defaultNames=new Set(DEFAULT_MACHINE_CONFIG.map(machine=>machine[0]));
+   const completeDefaults=DEFAULT_MACHINE_CONFIG.map(machine=>configuredByName.get(machine[0])||machine);
+   return [...completeDefaults,...config.filter(machine=>!defaultNames.has(machine[0]))];
+  });
+}
+
+function loadPersonnelNames(){
+ return loadSheetJson(PERSONNEL_JSON,'Personel verisi boş','Personel sheet zaman aşımı','Personel sheet bağlantısı kurulamadı')
+  .then(table=>{
+   const row=table.rows?.[0];
+   if(!row)return [];
+   return row.c.map(cell=>cell?.v).filter(value=>value!==null&&value!==undefined&&String(value).trim()!=='').map(value=>String(value).trim());
+  });
+}
+
+function loadSheetRows(){
+ return loadSheetJson(SHEET_JSON,'Google Sheet verisi boş','Google Sheet zaman aşımı','Google Sheet bağlantısı kurulamadı')
+  .then(table=>{
+   const rows=table.rows||[];
+   return rows.map(row=>{
+    const cells=(row.c||[]).map(cell=>cell?.v??'');
+    return {
+     registers:cells.slice(0,100).map(value=>Number(value)||0),
+     date:String(cells[100]??'').trim(),
+     dateFormatted:String(row.c?.[100]?.f??'').trim(),
+     time:String(cells[101]??'').trim(),
+     timeFormatted:String(row.c?.[101]?.f??'').trim()
+    };
+   });
+  });
+}
+
+function parseSheetDateTime(row){
+ function dateParts(value){
+  const dateValue=String(value??'').trim();
+  const googleDate=/^Date\((\d{4}),(\d{1,2}),(\d{1,2})/.exec(dateValue);
+  if(googleDate)return [Number(googleDate[1]),Number(googleDate[2])+1,Number(googleDate[3])];
+  const parts=dateValue.split(/[./-]/).map(Number);
+  if(parts.length!==3||parts.some(Number.isNaN))return null;
+  return parts[0]>31?[parts[0],parts[1],parts[2]]:[parts[2],parts[1],parts[0]];
+ }
+ function timeParts(value){
+  const timeValue=String(value??'').trim();
+  const googleTime=/^Date\(\d{4},\d{1,2},\d{1,2},(\d{1,2}),(\d{1,2})(?:,(\d{1,2}))?/.exec(timeValue);
+  const parts=googleTime?googleTime.slice(1,4).map(part=>Number(part||0)):timeValue.split(':').map(Number);
+  return parts.length>=2&&!parts.slice(0,2).some(Number.isNaN)?parts:null;
+ }
+ for(const dateValue of [row.date,row.dateFormatted]){
+  const parts=dateParts(dateValue);
+  if(!parts)continue;
+  const [year,month,day]=parts;
+  if(month<1||month>12||day<1)continue;
+  for(const timeValue of [row.time,row.timeFormatted]){
+   const parts=timeParts(timeValue);
+   if(!parts)continue;
+   const [hour,minute]=parts;
+   const second=parts[2]||0;
+   if(hour<0||hour>23||minute<0||minute>59||second<0||second>59)continue;
+   const result=new Date(year,month-1,day,hour,minute,second,0);
+   if(result.getFullYear()===year&&result.getMonth()===month-1&&result.getDate()===day)return result;
+  }
+ }
+ return null;
+}
+
+function floorTo10Min(date){
+ const result=new Date(date);
+ result.setSeconds(0,0);
+ result.setMinutes(Math.floor(result.getMinutes()/10)*10);
+ return result;
+}
+
+function rowsForTimeRange(sheetRows,start,end){
+ const rowsByTime=new Map();
+ sheetRows.forEach(row=>{
+  const timestamp=parseSheetDateTime(row);
+  if(timestamp){
+   const bucket=floorTo10Min(timestamp).getTime();
+   const existing=rowsByTime.get(bucket);
+   if(!existing||Math.abs(timestamp.getTime()-bucket)<Math.abs(parseSheetDateTime(existing).getTime()-bucket)){
+    rowsByTime.set(bucket,row);
+   }
+  }
+ });
+ const gridStart=floorTo10Min(start).getTime();
+ const gridEnd=floorTo10Min(end).getTime();
+ const selectedRows=[];
+ for(let timestamp=gridStart;timestamp<=gridEnd;timestamp+=10*60000){
+  selectedRows.push(rowsByTime.get(timestamp)||{registers:[],missing:true});
+ }
+ return selectedRows;
+}
+
+function productionForRow(row,registers){
+ return registers.reduce((total,register)=>total+(row.registers[register-500]||0),0);
+}
+
+function counterDelta(rows,register){
+ let previous=null;
+ return rows.reduce((total,row)=>{
+  if(row.missing)return total;
+  const current=row.registers[register-500]||0;
+  const delta=previous===null?0:current>=previous?current-previous:current;
+  previous=current;
+  return total+Math.max(0,delta);
+ },0);
+}
+
+function computeMachineStats(sheetRows,machine,start,end){
+ const rows=rowsForTimeRange(sheetRows,start,end);
+ let previousProd=null,totalProd=0;
+ rows.forEach(row=>{
+  if(row.missing)return;
+  const current=productionForRow(row,machine[1]);
+  if(previousProd!==null){
+   const delta=current>=previousProd?current-previousProd:current;
+   totalProd+=Math.max(0,delta);
+  }
+  previousProd=current;
+ });
+ const workingSeconds=counterDelta(rows,machine[2]);
+ const stoppedSeconds=counterDelta(rows,machine[3]);
+ const cycleSeconds=totalProd>0?workingSeconds/totalProd:0;
+ return {totalProd,workingSeconds,stoppedSeconds,cycleSeconds};
+}
+
+function formatDurationSeconds(seconds){
+ const totalSeconds=Math.max(0,Math.round(seconds));
+ const hours=Math.floor(totalSeconds/3600);
+ const minutes=Math.floor((totalSeconds%3600)/60);
+ const remainingSeconds=totalSeconds%60;
+ return [hours,minutes,remainingSeconds].map(value=>String(value).padStart(2,'0')).join(':');
+}
+
+function formatDateTimeShort(date){
+ if(!(date instanceof Date)||Number.isNaN(date.getTime()))return '-';
+ const day=String(date.getDate()).padStart(2,'0');
+ const month=String(date.getMonth()+1).padStart(2,'0');
+ const year=date.getFullYear();
+ const hours=String(date.getHours()).padStart(2,'0');
+ const minutes=String(date.getMinutes()).padStart(2,'0');
+ return `${day}.${month}.${year} ${hours}:${minutes}`;
+}
+
+function computeWorkPeriods(entries,machineNames,personnel){
+ const sorted=entries.map(entry=>({entry,dt:parseEntryDateTime(entry)})).filter(item=>item.dt).sort((a,b)=>a.dt-b.dt);
+ const periods=[];
+ const openStart={};
+ sorted.forEach(({entry,dt})=>{
+  machineNames.forEach((name,index)=>{
+   const cellValue=entry.machines[index];
+   if(cellValue==='')return; // Boş hücre: bu satırda bu makina için bilgi yok, durum değişmedi say
+   const isPerson=cellValue===personnel;
+   if(isPerson&&!(index in openStart)){
+    openStart[index]=dt;
+   }else if(!isPerson&&(index in openStart)){
+    periods.push({machine:name,start:openStart[index],end:dt});
+    delete openStart[index];
+   }
+  });
+ });
+ Object.keys(openStart).forEach(index=>{
+  periods.push({machine:machineNames[index],start:openStart[index],end:null});
+ });
+ return periods;
+}
+
+function loadOpyerRows(){
+ return loadSheetJson(OPYER_JSON,'OPYER verisi boş','OPYER sheet zaman aşımı','OPYER sheet bağlantısı kurulamadı')
+  .then(table=>{
+   const rows=table.rows||[];
+   if(rows.length===0)return {machineNames:[],entries:[]};
+   const header=rows[0].c.map(cell=>String(cell?.v??'').trim());
+   const machineNames=header.slice(2);
+   const entries=rows.slice(1).map(row=>{
+    const cells=row.c||[];
+    const tarih=String(cells[0]?.v??'').trim();
+    const saat=String(cells[1]?.v??'').trim();
+    const machines=machineNames.map((name,index)=>String(cells[index+2]?.v??'').trim());
+    return {tarih,saat,machines};
+   }).filter(entry=>entry.tarih!=='');
+   return {machineNames,entries};
+  });
+}
+
+function parseTurkishDate(tarih){
+ const parts=tarih.split('.');
+ if(parts.length!==3)return null;
+ const day=Number(parts[0]),month=Number(parts[1]),year=Number(parts[2]);
+ if(!day||!month||!year)return null;
+ return new Date(year,month-1,day);
+}
+
+function parseEntryDateTime(entry){
+ const date=parseTurkishDate(entry.tarih);
+ if(!date)return null;
+ const timeParts=entry.saat.split(':');
+ date.setHours(Number(timeParts[0])||0,Number(timeParts[1])||0,0,0);
+ return date;
+}
+
+let opyerData={machineNames:[],entries:[]};
+
+async function init(){
+ try{
+  const [names,opyer,config]=await Promise.all([loadPersonnelNames(),loadOpyerRows(),loadMachineConfig().catch(error=>{console.error('MakAd sheet okunamadı, varsayılan liste kullanılıyor.',error);return DEFAULT_MACHINE_CONFIG;})]);
+  machineConfig=config;
+  const uniqueNames=[...new Set(names)].sort((a,b)=>a.localeCompare(b,'tr'));
+  document.getElementById('personnelSelect').innerHTML='<option value="">Personel seçin</option>'+uniqueNames.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+  opyerData=opyer;
+  document.getElementById('notice').textContent='Veriler yüklendi. Personel ve tarih aralığı seçip "Göster" butonuna basın.';
+ }catch(error){
+  console.error(error);
+  document.getElementById('notice').textContent='Veriler yüklenemedi: '+error.message;
+ }
+}
+
+async function show(){
+ const personnel=document.getElementById('personnelSelect').value;
+ const startValue=document.getElementById('startDate').value;
+ const endValue=document.getElementById('endDate').value;
+ const startTimeValue=document.getElementById('startTime').value||'00:00';
+ const endTimeValue=document.getElementById('endTime').value||'23:59';
+ if(!personnel){
+  document.getElementById('notice').textContent='Lütfen bir personel seçin.';
+  document.getElementById('notice').style.display='block';
+  document.getElementById('resultPanel').style.display='none';
+  return;
+ }
+ const now=new Date();
+ const rangeStart=startValue?new Date(startValue+'T'+startTimeValue+':00'):new Date(0);
+ let rangeEnd=endValue?new Date(endValue+'T'+endTimeValue+':59'):now;
+ if(rangeEnd>now)rangeEnd=now;
+
+ document.getElementById('resultPanel').style.display='block';
+ document.getElementById('notice').style.display='none';
+ document.getElementById('resultBody').innerHTML='<tr><td colspan="7">OPYER verileri yenileniyor...</td></tr>';
+
+ // Her "Göster" tıklamasında OPYER verisini tazeden çek: sheet üzerinde yapılan değişiklikler (yeni/eski kayıtlar) anında yansısın.
+ try{
+  opyerData=await loadOpyerRows();
+ }catch(error){
+  console.error(error);
+  document.getElementById('resultBody').innerHTML='<tr><td colspan="7">OPYER verileri alınamadı: '+escapeHtml(error.message)+'</td></tr>';
+  return;
+ }
+
+ // Personelin OPYER geçmişindeki her makine ataması, o makinede bir SONRAKİ değişikliğe (veya devam ediyorsa şimdiye) kadar olan çalışma dönemini oluşturur.
+ const periods=computeWorkPeriods(opyerData.entries,opyerData.machineNames,personnel);
+ const overlapping=periods.map(period=>{
+  const periodEnd=period.end||now;
+  const overlapStart=period.start>rangeStart?period.start:rangeStart;
+  const overlapEnd=periodEnd<rangeEnd?periodEnd:rangeEnd;
+  return {machine:period.machine,overlapStart,overlapEnd,ongoing:period.end===null&&periodEnd===overlapEnd};
+ }).filter(period=>period.overlapStart<period.overlapEnd)
+  .sort((a,b)=>a.overlapStart-b.overlapStart);
+
+ const uniqueMachines=new Set(overlapping.map(period=>period.machine));
+ document.getElementById('totalCount').textContent=overlapping.length;
+ document.getElementById('machineCount').textContent=uniqueMachines.size;
+ document.getElementById('resultPanel').style.display='block';
+ document.getElementById('notice').style.display='none';
+
+ if(overlapping.length===0){
+  document.getElementById('resultBody').innerHTML='<tr><td colspan="7">Seçilen tarih aralığında kayıt bulunamadı.</td></tr>';
+  return;
+ }
+
+ document.getElementById('resultBody').innerHTML='<tr><td colspan="7">Üretim verileri hesaplanıyor...</td></tr>';
+
+ let sheetRows;
+ try{
+  sheetRows=await loadSheetRows();
+ }catch(error){
+  console.error(error);
+  document.getElementById('resultBody').innerHTML='<tr><td colspan="7">Üretim verileri alınamadı: '+escapeHtml(error.message)+'</td></tr>';
+  return;
+ }
+ document.getElementById('resultBody').innerHTML=overlapping.map(period=>{
+  const machine=machineConfig.find(entry=>entry[0]===period.machine);
+  if(!machine)return `<tr>
+   <td>${escapeHtml(formatDateTimeShort(period.overlapStart))}</td>
+   <td>${period.ongoing?'Devam ediyor':escapeHtml(formatDateTimeShort(period.overlapEnd))}</td>
+   <td>${escapeHtml(period.machine)}</td>
+   <td colspan="4">Bu makine için register ayarı bulunamadı.</td>
+  </tr>`;
+  const stats=computeMachineStats(sheetRows,machine,period.overlapStart,period.overlapEnd);
+  return `<tr>
+   <td>${escapeHtml(formatDateTimeShort(period.overlapStart))}</td>
+   <td>${period.ongoing?'Devam ediyor':escapeHtml(formatDateTimeShort(period.overlapEnd))}</td>
+   <td>${escapeHtml(period.machine)}</td>
+   <td>${formatNumber(stats.totalProd)}</td>
+   <td>${formatDurationSeconds(stats.workingSeconds)}</td>
+   <td>${formatDurationSeconds(stats.stoppedSeconds)}</td>
+   <td>${stats.cycleSeconds?stats.cycleSeconds.toFixed(1)+' sn/adet':'-'}</td>
+  </tr>`;
+ }).join('');
+}
+
+document.getElementById('showBtn').addEventListener('click',show);
+init();
+</script>
+</body>
+</html>

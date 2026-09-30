@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THERMOHIS Üretim Takip</title>
+<style>
+:root{--bg:#08111f;--panel:#111c2e;--border:#22334d;--text:#e5edf7;--muted:#8fa3bb;--blue:#55a7ff;--green:#35d399;--red:#fb7185;--yellow:#f6c453}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#123254 0,var(--bg) 42%);color:var(--text);font-family:"Segoe UI",sans-serif}
+header{display:flex;justify-content:space-between;align-items:end;gap:20px;padding:28px clamp(18px,5vw,64px) 20px;border-bottom:1px solid var(--border)}
+h1{margin:0;color:var(--blue);font-size:clamp(24px,4vw,40px)}p{margin:7px 0}.muted,.updated{color:var(--muted)}.updated{white-space:nowrap;font-size:13px}
+main{padding:24px clamp(18px,5vw,64px) 48px}.summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}.summary-item{background:var(--panel);border:1px solid var(--border);padding:12px 16px;border-radius:9px}.summary-label{color:var(--muted);font-size:13px;margin-right:8px}.summary-value{font-weight:700}
+.notice{padding:14px;background:#18263b;border:1px solid var(--border);border-radius:9px;color:var(--muted);margin-bottom:20px}.machines{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px}.card{background:rgba(17,28,46,.94);border:1px solid var(--border);border-radius:10px;padding:18px;min-height:174px}.card h2{margin:0 0 16px;font-size:18px}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #8fa3bb22}.label{color:var(--muted)}.count{color:var(--yellow);font-size:28px;font-weight:800}.running{color:var(--green);font-weight:700}.paused{color:var(--yellow);font-weight:700}.stopped{color:var(--red);font-weight:700}.charts-button,.orders-button{margin-left:auto;border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:#06101e;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer}.charts-button:hover,.orders-button:hover{background:#8bc5ff}
+.back-button{border:1px solid var(--blue);border-radius:7px;background:transparent;color:var(--blue);padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}.back-button:hover{background:#1a2c46}
+.access-gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(4,9,17,.94)}
+.access-gate form{width:min(360px,92vw);padding:24px;background:var(--panel);border:1px solid var(--border);border-radius:12px}
+.access-gate h2{margin:0 0 16px;color:var(--blue);font-size:20px}
+.access-gate label{display:block;margin-bottom:6px;color:var(--muted);font-size:13px}
+.access-gate input{width:100%;margin-bottom:12px;padding:11px 12px;border:1px solid var(--border);border-radius:7px;background:#0c1626;color:var(--text);font:inherit}
+.access-gate button{width:100%;padding:11px 12px;border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:#06101e;font:inherit;font-weight:700;cursor:pointer}
+.access-error{min-height:20px;margin:10px 0 0;color:var(--red);font-size:13px}
+.operator-row .operator-value{color:var(--text);text-align:right}
+.operator-time{color:var(--muted);font-weight:400}
+.operator-button{width:100%;margin-top:12px;border:1px solid var(--blue);border-radius:7px;background:transparent;color:var(--blue);padding:9px 12px;font:inherit;font-weight:700;cursor:pointer}
+.operator-button:hover{background:#55a7ff22}
+.modal-overlay{position:fixed;inset:0;background:rgba(4,9,17,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;width:min(360px,92vw);box-shadow:0 12px 34px rgba(0,0,0,.45)}
+.modal h3{margin:0 0 18px;font-size:18px;color:var(--blue)}
+.modal label{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}
+.modal input[type="text"],.modal input[type="datetime-local"],.modal select{width:100%;padding:10px 12px;border-radius:7px;border:1px solid var(--border);background:#0c1626;color:var(--text);font-size:14px;outline:none;margin-bottom:16px}
+.modal select:focus{border-color:var(--blue)}
+.modal input:focus{border-color:var(--blue)}
+.time-choice{display:flex;gap:8px;margin-bottom:14px}
+.time-choice button{flex:1;padding:9px 8px;border-radius:7px;border:1px solid var(--border);background:#0c1626;color:var(--muted);font:inherit;font-weight:700;cursor:pointer}
+.time-choice button.active{border-color:var(--blue);color:var(--blue);background:#55a7ff22}
+.modal-actions{display:flex;gap:10px;margin-top:6px}
+.modal-actions button{flex:1;padding:11px 12px;border-radius:7px;font:inherit;font-weight:700;cursor:pointer}
+.history-section{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+.history-section h4{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.history-list{max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.history-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:#0c1626;border:1px solid var(--border);border-radius:7px;font-size:13px}
+.history-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.history-name{color:var(--text);font-weight:600}
+.history-time{color:var(--muted);white-space:nowrap}
+.history-empty{color:var(--muted);font-size:13px;margin:0}
+.history-delete{flex:none;width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--red);font-size:14px;font-weight:700;line-height:1;cursor:pointer;padding:0}
+.history-delete:hover{background:#fb718522;border-color:var(--red)}
+#saveOperatorBtn{border:1px solid var(--blue);background:var(--blue);color:#06101e}
+#saveOperatorBtn:hover{background:#8bc5ff}
+#cancelOperatorBtn{border:1px solid var(--border);background:transparent;color:var(--muted)}
+#cancelOperatorBtn:hover{color:var(--text)}
+@media(max-width:600px){
+ header{display:block;padding:22px 16px 16px}
+ main{padding:18px 16px 32px}
+ .updated{margin-top:14px;white-space:normal}
+ .summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+ .summary-item{min-width:0;padding:11px 12px}
+ .summary-label{display:block;margin:0 0 4px}
+ .charts-button,.orders-button{grid-column:1 / -1;width:100%;margin:2px 0 0}
+ .machines{grid-template-columns:minmax(0,1fr)}
+ .card{min-width:0;padding:14px}
+}
+</style>
+</head>
+<body>
+<header><div><h1>THERMOHIS</h1><p class="muted">Personel Planlama</p></div><div><button class="back-button" type="button" onclick="location.href='index.html'">Geri</button><p class="updated" id="updated">Veriler bekleniyor...</p></div></header>
+<main>
+<div class="notice" id="notice">Google Sheet verileri yükleniyor...</div>
+<section class="summary"><div class="summary-item"><span class="summary-label">Makine</span><span class="summary-value" id="machine-total">0</span></div><div class="summary-item"><span class="summary-label">Çalışan</span><span class="summary-value" id="running-total">0</span></div><div class="summary-item"><span class="summary-label">Toplam üretim</span><span class="summary-value" id="production-total">0</span></div><button class="charts-button" type="button" onclick="location.href='grafik.html'">Grafikler</button><button class="orders-button" type="button" onclick="location.href='sipariş.html'">Sipariş</button></section>
+<section class="machines" id="machines"></section>
+</main>
+<div class="modal-overlay hidden" id="operatorModal">
+  <div class="modal">
+    <h3>Operatör Bilgisi - <span id="modalMachineName"></span></h3>
+    <label for="operatorNameSelect">Operatör Adı</label>
+    <select id="operatorNameSelect"></select>
+    <label>Değişiklik Zamanı</label>
+    <div class="time-choice">
+      <button type="button" id="nowBtn" class="active">Şimdi</button>
+      <button type="button" id="customBtn">Farklı Saat</button>
+    </div>
+    <input type="datetime-local" id="operatorTimeInput" style="display:none">
+    <div class="modal-actions">
+      <button type="button" id="cancelOperatorBtn">Vazgeç</button>
+      <button type="button" id="saveOperatorBtn">Kaydet</button>
+    </div>
+    <div class="history-section">
+      <h4>Operatör Geçmişi</h4>
+      <div class="history-list" id="operatorHistoryList"></div>
+    </div>
+  </div>
+</div>
+<div class="access-gate" id="accessGate">
+ <form id="accessForm">
+  <h2>Personel Planlama</h2>
+  <label for="accessPassword">Parola</label>
+  <input id="accessPassword" type="password" autocomplete="current-password" required>
+  <button type="submit">Giriş</button>
+  <p class="access-error" id="accessError" role="alert"></p>
+ </form>
+</div>
+<script>
+const SHEET_JSON='https://docs.google.com/spreadsheets/d/1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M/gviz/tq?tqx=out:json&gid=0';
+const MAKAD_JSON='https://docs.google.com/spreadsheets/d/1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M/gviz/tq?tqx=out:json&sheet=MakAd&headers=1';
+// Personel sayfasının gid değerini buraya yazın (Sheets'te ilgili sekmeye tıklayınca adres çubuğundaki #gid=XXXX kısmı)
+// Personel sekmesinin tam adını buraya yazın (Sheets'in altındaki sekme ismiyle BİREBİR aynı olmalı, örn: 'Personel')
+const PERSONNEL_SHEET_NAME='Personel';
+const PERSONNEL_JSON='https://docs.google.com/spreadsheets/d/1RYdGaL3zG_2zZmNzVqeLwKYkvXfRQD18WEYyxpp054M/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(PERSONNEL_SHEET_NAME);
+const OPYER_WEBAPP_URL='https://script.google.com/macros/s/AKfycbxT0tSvlyDihXhIqNFfV007amYtYhH9SSaiFmP9ekQ55kDHxQnyk4hkTN-h14XUI3_q/exec';
+const DEFAULT_MACHINE_CONFIG=[
+ ['Boru Çekme',[502,502,502,502,502,502,502,502],500,501],['İç Su Press\'i',[506,506],504,505],['İç İkiye Bölme',[510,510],508,509],['İç Kafa Kesme',[514],512,513],['İç Trim',[522,524],520,521],['İç Ağız Büküm',[528,530],526,527],['İç Alt Form Düz.',[534],532,533],['İç CNC',[542,544],540,541],['Dış Su Press\'i',[548,548],546,547],['Dış İkiye Bölme',[552,552],550,551],['Dış Kafa Kesme',[560],558,559],['Dış Üst Form Düz.',[564],562,563],['Dış Yatay Trim',[568],566,567],['Dış Diş Açma',[572],570,571],['Lazer Kaynak',[575,576],573,574],['İç Kılıf Taban Kaynak',[579],577,578],['Dış Kılıf Taban Kaynak',[582,583],580,581],['Puntalama Makinesi',[586],584,585],['Su Testi',[589],587,588]
+];
+let machineConfig=DEFAULT_MACHINE_CONFIG;
+function parseRegisterAddresses(value){
+ return String(value??'').match(/\d+/g)?.map(Number).filter(address=>Number.isFinite(address)&&address>0)||[];
+}
+const formatNumber=value=>Number(value).toLocaleString('tr-TR');
+function formatDuration(seconds){
+ const totalSeconds=Math.max(0,Math.floor(Number(seconds)||0));
+ const hours=Math.floor(totalSeconds/3600);
+ const minutes=Math.floor(totalSeconds%3600/60);
+ const remainingSeconds=totalSeconds%60;
+ return [hours,minutes,remainingSeconds].map(value=>String(value).padStart(2,'0')).join(':');
+}
+function escapeHtml(value){return String(value).replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));}
+let sheetJsonQueue=Promise.resolve();
+function loadSheetJson(url,emptyError,timeoutError,connectionError){
+ const request=sheetJsonQueue.then(()=>new Promise((resolve,reject)=>{
+  window.google=window.google||{};window.google.visualization=window.google.visualization||{};window.google.visualization.Query=window.google.visualization.Query||{};
+  let script=null;
+  const timeout=setTimeout(()=>{cleanup();reject(Error(timeoutError));},10000);
+  function cleanup(){clearTimeout(timeout);delete window.google.visualization.Query.setResponse;if(script)script.remove();}
+  window.google.visualization.Query.setResponse=data=>{
+   if(data.status!=='ok'||!data.table?.rows?.[0]){cleanup();reject(Error(emptyError));return;}
+   const cells=data.table.rows[0].c.map(cell=>cell?.v??'');
+   cleanup();resolve(cells);
+  };
+  script=document.createElement('script');
+  script.src=url+'&t='+Date.now();
+  script.onerror=()=>{cleanup();reject(Error(connectionError));};
+  document.head.appendChild(script);
+ }));
+ sheetJsonQueue=request.then(()=>undefined,()=>undefined);
+ return request;
+}
+function loadMachineConfig(){
+ const request=sheetJsonQueue.then(()=>new Promise((resolve,reject)=>{
+  window.google=window.google||{};window.google.visualization=window.google.visualization||{};window.google.visualization.Query=window.google.visualization.Query||{};
+  let script=null;
+  const timeout=setTimeout(()=>{cleanup();reject(Error('MakAd sheet zaman aşımı'));},10000);
+  function cleanup(){clearTimeout(timeout);delete window.google.visualization.Query.setResponse;if(script)script.remove();}
+  window.google.visualization.Query.setResponse=data=>{
+   if(data.status!=='ok'||!data.table?.rows?.length){cleanup();reject(Error('MakAd sheet verisi boş'));return;}
+   const config=data.table.rows.map(row=>{
+    const cells=(row.c||[]).map(cell=>cell?.v??'');
+    const name=String(cells[0]??'').trim();
+    const fallback=DEFAULT_MACHINE_CONFIG.find(machine=>machine[0]===name);
+    const sheetRegisters=parseRegisterAddresses(cells[1]);
+    const registers=sheetRegisters.length?sheetRegisters:(fallback?.[1]||[]);
+    return [name,registers,Number(cells[2])||0,Number(cells[3])||0];
+   }).filter(machine=>machine[0]!==''&&machine[1].length>0);
+   cleanup();
+   if(config.length===0){reject(Error('MakAd sheet verisi boş'));return;}
+   resolve(config);
+  };
+  script=document.createElement('script');
+  script.src=MAKAD_JSON+'&t='+Date.now();
+  script.onerror=()=>{cleanup();reject(Error('MakAd sheet bağlantısı kurulamadı'));};
+  document.head.appendChild(script);
+ }));
+ sheetJsonQueue=request.then(()=>undefined,()=>undefined);
+ return request;
+}
+function loadSheetRow(){
+ return loadSheetJson(SHEET_JSON,'Google Sheet verisi boş','Google Sheet zaman aşımı','Google Sheet bağlantısı kurulamadı');
+}
+const previousDurations={};
+const cycleStats={};
+
+async function logOperatorSnapshotToSheet(changedAt,changedMachineId,changedOperator,timeChoice){
+ const machineNames=machineConfig.map(machine=>machine[0]);
+ const operatorRow=machineConfig.map((machine,idx)=>idx===changedMachineId?(changedOperator||'Kapalı'):(operators[idx]&&operators[idx].name?operators[idx].name:'Kapalı'));
+ const changedDate=new Date(changedAt);
+ await fetch(OPYER_WEBAPP_URL,{
+  method:'POST',
+  mode:'no-cors',
+  body:JSON.stringify({
+   machineNames,
+   operators:operatorRow,
+   iso:changedDate.toISOString(),
+   mode:timeChoice||'now',
+   changedMachineName:machineConfig[changedMachineId][0],
+   changedOperator:changedOperator||'Kapalı'
+  })
+ });
+}
+
+let employeeList=[];
+function loadPersonnelNames(){
+ return loadSheetJson(PERSONNEL_JSON,'Personel verisi boş','Personel sheet zaman aşımı','Personel sheet bağlantısı kurulamadı')
+  .then(cells=>cells.filter(value=>value!==null&&value!==undefined&&String(value).trim()!=='').map(value=>String(value).trim()));
+}
+async function refreshPersonnelList(){
+ try{
+  const names=await loadPersonnelNames();
+  employeeList=[...new Set(names)].sort((a,b)=>a.localeCompare(b,'tr'));
+  populateOperatorSelect();
+ }catch(error){
+  console.error('Personel listesi alınamadı:',error);
+ }
+}
+function populateOperatorSelect(){
+ const select=document.getElementById('operatorNameSelect');
+ select.innerHTML='<option value="Kapalı">Kapalı</option>'+employeeList.map(name=>`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+}
+populateOperatorSelect();
+const operators=JSON.parse(localStorage.getItem('operators')||'{}');
+function saveOperators(){localStorage.setItem('operators',JSON.stringify(operators));}
+const operatorHistory=JSON.parse(localStorage.getItem('operatorHistory')||'{}');
+function saveOperatorHistory(){localStorage.setItem('operatorHistory',JSON.stringify(operatorHistory));}
+function generateUid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function recalcCurrentOperator(id){
+ const entries=operatorHistory[id]||[];
+ if(entries.length===0){delete operators[id];}
+ else{
+  const latest=entries.reduce((a,b)=>new Date(b.time)>new Date(a.time)?b:a);
+  operators[id]={name:latest.name,time:latest.time};
+ }
+ saveOperators();
+}
+function renderOperatorHistory(id){
+ const list=document.getElementById('operatorHistoryList');
+ const entries=(operatorHistory[id]||[]).slice().sort((a,b)=>new Date(b.time)-new Date(a.time));
+ if(entries.length===0){list.innerHTML='<p class="history-empty">Henüz operatör geçmişi yok.</p>';return;}
+ list.innerHTML=entries.map(entry=>{
+  const date=new Date(entry.time);
+  const dateStr=isNaN(date.getTime())?'-':date.toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  return `<div class="history-item" data-uid="${entry.uid}"><div class="history-info"><span class="history-name">${escapeHtml(entry.name)}</span><span class="history-time">${dateStr}</span></div><button type="button" class="history-delete" title="Sil">✕</button></div>`;
+ }).join('');
+}
+function formatOperatorDisplay(entry){
+ if(!entry||!entry.name) return 'Kaplaı';
+ const date=new Date(entry.time);
+ const dateStr=isNaN(date.getTime())?'':date.toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ return `${escapeHtml(entry.name)}${dateStr?` <small class="operator-time">(${dateStr}'den itibaren)</small>`:''}`;
+}
+function toLocalDateTimeInputValue(date){
+ const pad=n=>String(n).padStart(2,'0');
+ return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+let currentModalMachineId=null;
+function applyCurrentOperatorToSelect(id){
+ const select=document.getElementById('operatorNameSelect');
+ const currentName=operators[id]?operators[id].name:'';
+ select.value=(currentName&&employeeList.includes(currentName))?currentName:'Kapalı';
+}
+async function openOperatorModal(id,name){
+ currentModalMachineId=id;
+ document.getElementById('modalMachineName').textContent=name;
+ applyCurrentOperatorToSelect(id);
+ renderOperatorHistory(id);
+ setTimeChoice('now');
+ document.getElementById('operatorModal').classList.remove('hidden');
+ document.getElementById('operatorNameSelect').focus();
+ await refreshPersonnelList();
+ if(currentModalMachineId===id) applyCurrentOperatorToSelect(id);
+}
+function closeOperatorModal(){
+ document.getElementById('operatorModal').classList.add('hidden');
+ currentModalMachineId=null;
+}
+function setTimeChoice(choice){
+ const nowBtn=document.getElementById('nowBtn'),customBtn=document.getElementById('customBtn'),timeInput=document.getElementById('operatorTimeInput');
+ if(choice==='now'){nowBtn.classList.add('active');customBtn.classList.remove('active');timeInput.style.display='none';}
+ else{customBtn.classList.add('active');nowBtn.classList.remove('active');timeInput.style.display='block';if(!timeInput.value)timeInput.value=toLocalDateTimeInputValue(new Date());}
+ timeInput.dataset.choice=choice;
+}
+function updateOperatorDisplay(id){
+ const valueSpan=document.querySelector(`.card[data-id="${id}"] .operator-value`);
+ if(valueSpan) valueSpan.innerHTML=formatOperatorDisplay(operators[id]);
+}
+function findConflictingMachine(name,excludeId){
+ if(!name||name==='Kapalı') return null;
+ for(const key of Object.keys(operators)){
+  const otherId=Number(key);
+  if(otherId===excludeId) continue;
+  if(operators[otherId]&&operators[otherId].name===name) return otherId;
+ }
+ return null;
+}
+document.getElementById('machines').addEventListener('click',function(e){
+ const button=e.target.closest('.operator-button');
+ if(button) openOperatorModal(Number(button.dataset.id),button.dataset.name);
+});
+document.getElementById('nowBtn').addEventListener('click',()=>setTimeChoice('now'));
+document.getElementById('customBtn').addEventListener('click',()=>setTimeChoice('custom'));
+document.getElementById('cancelOperatorBtn').addEventListener('click',closeOperatorModal);
+document.getElementById('operatorModal').addEventListener('click',function(e){if(e.target.id==='operatorModal')closeOperatorModal();});
+document.getElementById('saveOperatorBtn').addEventListener('click',async function(){
+ const id=currentModalMachineId;
+ if(id===null) return;
+ const name=document.getElementById('operatorNameSelect').value;
+ const choice=document.getElementById('operatorTimeInput').dataset.choice||'now';
+ let time;
+ if(choice==='now'){time=new Date().toISOString();}
+ else{
+  const val=document.getElementById('operatorTimeInput').value;
+  if(!val){alert('Lütfen bir zaman seçin.');return;}
+  time=new Date(val).toISOString();
+ }
+ // Aynı personel aynı anda iki makinada çalışamaz: bu personel şu anda başka bir makinada atanmışsa kaydetmeyi engelle.
+ const conflictId=findConflictingMachine(name,id);
+ if(conflictId!==null){
+  alert(`${name} şu anda "${machineConfig[conflictId][0]}" makinasında çalışıyor görünüyor. Aynı personel aynı anda iki makinada birden çalışamaz. Önce o makinadaki atamayı değiştirin.`);
+  return;
+ }
+ const saveButton=document.getElementById('saveOperatorBtn');
+ saveButton.disabled=true;
+ try{
+  await logOperatorSnapshotToSheet(time,id,name,choice);
+  if(!operatorHistory[id]) operatorHistory[id]=[];
+  operatorHistory[id].unshift({uid:generateUid(),name,time,recordedAt:new Date().toISOString()});
+  if(operatorHistory[id].length>50) operatorHistory[id]=operatorHistory[id].slice(0,50);
+  saveOperatorHistory();
+  recalcCurrentOperator(id);
+  renderOperatorHistory(id);
+  updateOperatorDisplay(id);
+  closeOperatorModal();
+ }catch(error){
+  console.error('OPYER sekmesine operatör kaydı eklenemedi:',error);
+   alert('Google Sheets’teki OPYER sekmesine operatör kaydı gönderilemedi. İnternet bağlantısını kontrol edip tekrar deneyin.');
+ }finally{
+  saveButton.disabled=false;
+ }
+});
+document.getElementById('operatorHistoryList').addEventListener('click',function(e){
+ const button=e.target.closest('.history-delete');
+ if(!button) return;
+ const id=currentModalMachineId;
+ if(id===null) return;
+ const uid=button.closest('.history-item').dataset.uid;
+ if(!confirm('Bu operatör kaydını silmek istediğinize emin misiniz?')) return;
+ operatorHistory[id]=(operatorHistory[id]||[]).filter(entry=>entry.uid!==uid);
+ saveOperatorHistory();
+ recalcCurrentOperator(id);
+ renderOperatorHistory(id);
+ updateOperatorDisplay(id);
+});
+function render(machines){
+ document.getElementById('machines').innerHTML=machines.map(machine=>{const status=machine.status;return `<article class="card" data-id="${machine.id}"><h2>${escapeHtml(machine.isim)}</h2><div class="row"><span class="label">Durum</span><span class="${status==='Çalışıyor'?'running':status==='Durakladı'?'paused':'stopped'}">${status}</span></div><div class="row"><span class="label">Üretim adedi</span><span class="count">${formatNumber(machine.adet)}</span></div><div class="row"><span class="label">Çalışma Zamanı</span><span>${formatDuration(machine.calisma)}</span></div><div class="row"><span class="label">Durma Zamanı</span><span>${formatDuration(machine.durma)}</span></div><div class="row"><span class="label">Çevrim Süresi</span><span>${machine.cycleSeconds===null?'Hesaplanıyor':`${machine.cycleSeconds.toFixed(1)} sn/adet`}</span></div><div class="row operator-row"><span class="label">Operatör</span><span class="operator-value">${formatOperatorDisplay(operators[machine.id])}</span></div><button class="operator-button" type="button" data-id="${machine.id}" data-name="${escapeHtml(machine.isim)}">Operatör Değiştir</button></article>`}).join('');
+ document.getElementById('machine-total').textContent=machines.length;
+ document.getElementById('running-total').textContent=machines.filter(machine=>machine.status==='Çalışıyor').length;
+ document.getElementById('production-total').textContent=formatNumber(machines.reduce((total,machine)=>total+Number(machine.adet||0),0));
+ document.getElementById('updated').textContent='Son güncelleme: '+new Date().toLocaleTimeString('tr-TR');
+ document.getElementById('notice').textContent='Google Sheet D verileri doğrudan okunuyor.';
+}
+async function update(){
+ try{
+    const cells=await loadSheetRow();
+  const registers={};for(let index=0;index<=100;index++){const raw=String(cells[index]??'').trim().replace(',','.');registers[500+index]=raw===''?0:Number(raw)||0;}
+  render(machineConfig.map((machine,id)=>{
+   const calisma=registers[machine[2]],durma=registers[machine[3]],previous=previousDurations[id];
+   const adet=machine[1].reduce((total,register)=>total+registers[register],0);
+   const stats=cycleStats[id]||{working:0,produced:0};
+  let cycleSeconds=adet>0?calisma/adet:null;
+   if(previous){
+    const workingDelta=calisma>=previous.calisma?calisma-previous.calisma:calisma;
+    const producedDelta=adet>=previous.adet?adet-previous.adet:adet;
+    if(workingDelta>0||producedDelta>0){stats.working+=Math.max(0,workingDelta);stats.produced+=Math.max(0,producedDelta);}
+    if(stats.produced>0) cycleSeconds=stats.working/stats.produced;
+   }
+   const calismaArtisi=previous&&calisma>previous.calisma,durmaArtisi=previous&&durma>previous.durma;
+  const status=calisma<30?'Çalışmıyor':calismaArtisi?'Çalışıyor':durmaArtisi?'Durakladı':previous?.status||'Çalışmıyor';
+   previousDurations[id]={calisma,durma,adet,status};
+   cycleStats[id]=stats;
+   return {id,isim:machine[0],adet,calisma,durma,status,cycleSeconds};
+  }));
+ }catch(error){document.getElementById('notice').textContent='Google Sheet okunamadı. Sheet paylaşımını "Bağlantıya sahip herkes: Görüntüleyici" yapın.';}
+}
+document.getElementById('accessForm').addEventListener('submit',async function(event){
+ event.preventDefault();
+ const password=document.getElementById('accessPassword');
+ if(password.value!=='HisTakip'){
+  document.getElementById('accessError').textContent='Parola yanlış. Tekrar deneyin.';
+  password.value='';
+  password.focus();
+  return;
+ }
+ const submitButton=document.querySelector('#accessForm button[type="submit"]');
+ submitButton.disabled=true;
+ try{
+  machineConfig=await loadMachineConfig();
+  document.getElementById('accessGate').remove();
+  update();setInterval(update,3000);
+  refreshPersonnelList();
+ }catch(error){
+  console.error('MakAd makine ayarları alınamadı:',error);
+  document.getElementById('accessError').textContent='Makine ayarları alınamadı. İnternet bağlantısını kontrol edip tekrar deneyin.';
+ }finally{
+  submitButton.disabled=false;
+ }
+});
+</script>
+</body>
+</html>
